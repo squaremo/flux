@@ -9,7 +9,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
-	"github.com/weaveworks/flux"
+	"github.com/weaveworks/flux/api"
+	httpclient "github.com/weaveworks/flux/http/client"
 )
 
 type DialErr struct {
@@ -22,7 +23,7 @@ func (de DialErr) Error() string {
 }
 
 // Dial initiates a new websocket connection.
-func Dial(client *http.Client, ua string, token flux.Token, u *url.URL) (Websocket, error) {
+func Dial(client *http.Client, ua string, token api.Token, u *url.URL) (Websocket, error) {
 	// Build the http request
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
@@ -33,7 +34,9 @@ func Dial(client *http.Client, ua string, token flux.Token, u *url.URL) (Websock
 	req.Header.Set("User-Agent", ua)
 
 	// Add authentication if provided
-	token.Set(req)
+	if string(token) != "" {
+		httpclient.SetToken(token, req)
+	}
 
 	// Use http client to do the http request
 	conn, resp, err := dialer(client).Dial(u.String(), req.Header)

@@ -42,7 +42,7 @@ func (opts *serviceShowOpts) RunE(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	services, err := opts.API.ListImages(noInstanceID, service)
+	services, err := opts.API.ListImages(service)
 	if err != nil {
 		return err
 	}

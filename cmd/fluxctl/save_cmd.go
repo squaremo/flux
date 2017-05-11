@@ -54,7 +54,7 @@ func (opts *saveOpts) RunE(cmd *cobra.Command, args []string) error {
 		return errorWantedNoArgs
 	}
 
-	config, err := opts.API.Export(noInstanceID)
+	config, err := opts.API.Export()
 	if err != nil {
 		return errors.Wrap(err, "exporting config")
 	}

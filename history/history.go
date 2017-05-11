@@ -1,7 +1,6 @@
 package history
 
 import (
-	"io"
 	"time"
 
 	"github.com/weaveworks/flux"
@@ -28,12 +27,4 @@ type EventReader interface {
 
 	// GetEvent finds a single event, by ID.
 	GetEvent(EventID) (Event, error)
-}
-
-type DB interface {
-	LogEvent(flux.InstanceID, Event) error
-	AllEvents(flux.InstanceID, time.Time, int64) ([]Event, error)
-	EventsForService(flux.InstanceID, flux.ServiceID, time.Time, int64) ([]Event, error)
-	GetEvent(EventID) (Event, error)
-	io.Closer
 }

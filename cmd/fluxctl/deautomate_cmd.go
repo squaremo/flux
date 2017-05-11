@@ -44,7 +44,7 @@ func (opts *serviceDeautomateOpts) RunE(cmd *cobra.Command, args []string) error
 		return err
 	}
 
-	jobID, err := opts.API.UpdatePolicies(noInstanceID, policy.Updates{
+	jobID, err := opts.API.UpdatePolicies(policy.Updates{
 		serviceID: policy.Update{Remove: []policy.Policy{policy.Automated}},
 	})
 	if err != nil {

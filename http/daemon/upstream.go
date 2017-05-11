@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 
-	"github.com/weaveworks/flux"
+	"github.com/weaveworks/flux/api"
 	"github.com/weaveworks/flux/history"
 	transport "github.com/weaveworks/flux/http"
 	fluxclient "github.com/weaveworks/flux/http/client"
@@ -26,7 +26,7 @@ import (
 type Upstream struct {
 	client    *http.Client
 	ua        string
-	token     flux.Token
+	token     api.Token
 	url       *url.URL
 	endpoint  string
 	apiClient *fluxclient.Client
@@ -48,7 +48,7 @@ var (
 	urlSchemeRE = regexp.MustCompile("^([[:alpha:]]+)(s?)://")
 )
 
-func NewUpstream(client *http.Client, ua string, t flux.Token, router *mux.Router, endpoint string, p remote.Platform, logger log.Logger) (*Upstream, error) {
+func NewUpstream(client *http.Client, ua string, t api.Token, router *mux.Router, endpoint string, p remote.Platform, logger log.Logger) (*Upstream, error) {
 	u, err := transport.MakeURL(endpoint, router, "RegisterDaemonV6")
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing URL")
@@ -150,7 +150,7 @@ func (a *Upstream) setConnectionDuration(duration float64) {
 
 func (a *Upstream) LogEvent(event history.Event) error {
 	// Instance ID is set via token here, so we can leave it blank.
-	return a.apiClient.LogEvent(flux.InstanceID(""), event)
+	return a.apiClient.LogEvent(event)
 }
 
 // Close closes the connection to the service

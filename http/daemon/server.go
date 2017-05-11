@@ -32,22 +32,17 @@ func NewRouter() *mux.Router {
 	r := transport.NewAPIRouter()
 	// We assume every request that doesn't match a route is a client
 	// calling an old or hitherto unsupported API.
-	r.NewRoute().Name("NotFound").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		transport.WriteError(w, r, http.StatusNotFound, transport.MakeAPINotFound(r.URL.Path))
-	})
-
+	transport.AddNotFoundRoutes(r)
 	return r
 }
 
 func NewHandler(d *daemon.Daemon, r *mux.Router) http.Handler {
-	handle := HTTPServer{d}
-	r.Get("SyncNotify").HandlerFunc(handle.SyncNotify)
-	r.Get("JobStatus").HandlerFunc(handle.JobStatus)
-	r.Get("SyncStatus").HandlerFunc(handle.SyncStatus)
-	r.Get("UpdateImages").HandlerFunc(handle.UpdateImages)
-	r.Get("UpdatePolicies").HandlerFunc(handle.UpdatePolicies)
-	r.Get("ListServices").HandlerFunc(handle.ListServices)
-	r.Get("ListImages").HandlerFunc(handle.ListImages)
+	server := HTTPServer{d}
+	handlers := map[string]http.HandlerFunc{}
+	transport.AddAPIHandlers(handlers, server)
+	for route, handler := range handlers {
+		r.Get(route).HandlerFunc(handler)
+	}
 
 	return middleware.Instrument{
 		RouteMatcher: r,
@@ -58,6 +53,8 @@ func NewHandler(d *daemon.Daemon, r *mux.Router) http.Handler {
 type HTTPServer struct {
 	daemon *daemon.Daemon
 }
+
+var _ transport.APIHandler = HTTPServer{}
 
 func (s HTTPServer) SyncNotify(w http.ResponseWriter, r *http.Request) {
 	err := s.daemon.SyncNotify()
@@ -177,6 +174,15 @@ func (s HTTPServer) UpdatePolicies(w http.ResponseWriter, r *http.Request) {
 func (s HTTPServer) ListServices(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	res, err := s.daemon.ListServices(namespace)
+	if err != nil {
+		transport.ErrorResponse(w, r, err)
+		return
+	}
+	transport.JSONResponse(w, r, res)
+}
+
+func (s HTTPServer) Export(w http.ResponseWriter, r *http.Request) {
+	res, err := s.daemon.Export()
 	if err != nil {
 		transport.ErrorResponse(w, r, err)
 		return

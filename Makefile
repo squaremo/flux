@@ -16,7 +16,7 @@ FLUXD_DEPS:=$(call godeps,./cmd/fluxd)
 FLUXSVC_DEPS:=$(call godeps,./cmd/fluxsvc)
 FLUXCTL_DEPS:=$(call godeps,./cmd/fluxctl)
 
-MIGRATIONS:=$(shell find db/migrations -type f)
+MIGRATIONS:=$(shell find service/db/migrations -type f)
 
 all: $(GOPATH)/bin/fluxctl $(GOPATH)/bin/fluxd $(GOPATH)/bin/fluxsvc build/.fluxd.done build/.fluxsvc.done
 

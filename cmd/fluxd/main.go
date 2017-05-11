@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/1.5/rest"
 
 	//	"github.com/weaveworks/flux"
-	"github.com/weaveworks/flux"
+	"github.com/weaveworks/flux/api"
 	"github.com/weaveworks/flux/cluster"
 	"github.com/weaveworks/flux/cluster/kubernetes"
 	"github.com/weaveworks/flux/daemon"
@@ -214,11 +214,12 @@ func main() {
 	if *upstreamURL != "" {
 		upstreamLogger := log.NewContext(logger).With("component", "upstream")
 		upstreamLogger.Log("URL", *upstreamURL)
+
 		upstream, err := daemonhttp.NewUpstream(
 			&http.Client{Timeout: 10 * time.Second},
 			fmt.Sprintf("fluxd/%v", version),
-			flux.Token(*token),
-			transport.NewServiceRouter(), // TODO should be NewUpstreamRouter, since it only needs the registration endpoint
+			api.Token(*token),
+			transport.NewUpstreamRouter(),
 			*upstreamURL,
 			&remote.ErrorLoggingPlatform{daemon, upstreamLogger},
 			upstreamLogger,

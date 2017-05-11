@@ -7,12 +7,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
 	"github.com/weaveworks/flux"
+	"github.com/weaveworks/flux/api"
 	"github.com/weaveworks/flux/history"
 	transport "github.com/weaveworks/flux/http"
 	"github.com/weaveworks/flux/job"
@@ -20,14 +20,21 @@ import (
 	"github.com/weaveworks/flux/update"
 )
 
+// SetToken adds the special "token" header to a request so a service
+// can authenticate it.
+func SetToken(t api.Token, req *http.Request) {
+	// FIXME parameterise the header name
+	req.Header.Set("Authorization", fmt.Sprintf("Scope-Probe token=%s", t))
+}
+
 type Client struct {
 	client   *http.Client
-	token    flux.Token
+	token    api.Token
 	router   *mux.Router
 	endpoint string
 }
 
-func New(c *http.Client, router *mux.Router, endpoint string, t flux.Token) *Client {
+func New(c *http.Client, router *mux.Router, endpoint string, t api.Token) *Client {
 	return &Client{
 		client:   c,
 		token:    t,
@@ -36,19 +43,19 @@ func New(c *http.Client, router *mux.Router, endpoint string, t flux.Token) *Cli
 	}
 }
 
-func (c *Client) ListServices(_ flux.InstanceID, namespace string) ([]flux.ServiceStatus, error) {
+func (c *Client) ListServices(namespace string) ([]flux.ServiceStatus, error) {
 	var res []flux.ServiceStatus
 	err := c.get(&res, "ListServices", "namespace", namespace)
 	return res, err
 }
 
-func (c *Client) ListImages(_ flux.InstanceID, s update.ServiceSpec) ([]flux.ImageStatus, error) {
+func (c *Client) ListImages(s update.ServiceSpec) ([]flux.ImageStatus, error) {
 	var res []flux.ImageStatus
 	err := c.get(&res, "ListImages", "service", string(s))
 	return res, err
 }
 
-func (c *Client) UpdateImages(_ flux.InstanceID, s update.ReleaseSpec) (job.ID, error) {
+func (c *Client) UpdateImages(s update.ReleaseSpec) (job.ID, error) {
 	args := []string{
 		"image", string(s.ImageSpec),
 		"kind", string(s.Kind),
@@ -69,79 +76,46 @@ func (c *Client) UpdateImages(_ flux.InstanceID, s update.ReleaseSpec) (job.ID, 
 	return res, err
 }
 
-func (c *Client) SyncNotify(_ flux.InstanceID) error {
+func (c *Client) SyncNotify() error {
 	if err := c.post("SyncNotify"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) JobStatus(_ flux.InstanceID, jobID job.ID) (job.Status, error) {
+func (c *Client) JobStatus(jobID job.ID) (job.Status, error) {
 	var res job.Status
 	err := c.get(&res, "JobStatus", "id", string(jobID))
 	return res, err
 }
 
-func (c *Client) SyncStatus(_ flux.InstanceID, ref string) ([]string, error) {
+func (c *Client) SyncStatus(ref string) ([]string, error) {
 	var res []string
 	err := c.get(&res, "SyncStatus", "ref", ref)
 	return res, err
 }
 
-func (c *Client) UpdatePolicies(_ flux.InstanceID, updates policy.Updates) (job.ID, error) {
+func (c *Client) UpdatePolicies(updates policy.Updates) (job.ID, error) {
 	var res job.ID
 	return res, c.methodWithResp("PATCH", &res, "UpdatePolicies", updates)
 }
 
-func (c *Client) LogEvent(_ flux.InstanceID, event history.Event) error {
+func (c *Client) LogEvent(event history.Event) error {
 	return c.postWithBody("LogEvent", event)
 }
 
-func (c *Client) History(_ flux.InstanceID, s update.ServiceSpec, before time.Time, limit int64) ([]history.Entry, error) {
-	params := []string{"service", string(s)}
-	if !before.IsZero() {
-		params = append(params, "before", before.Format(time.RFC3339Nano))
-	}
-	if limit >= 0 {
-		params = append(params, "limit", fmt.Sprint(limit))
-	}
-	var res []history.Entry
-	err := c.get(&res, "History", params...)
-	return res, err
-}
-
-func (c *Client) GetConfig(_ flux.InstanceID, fingerprint string) (flux.InstanceConfig, error) {
-	var params []string
-	if fingerprint != "" {
-		params = append(params, "fingerprint", fingerprint)
-	}
-	var res flux.InstanceConfig
-	err := c.get(&res, "GetConfig", params...)
-	return res, err
-}
-
-func (c *Client) SetConfig(_ flux.InstanceID, config flux.UnsafeInstanceConfig) error {
-	return c.postWithBody("SetConfig", config)
-}
-
-func (c *Client) PatchConfig(_ flux.InstanceID, patch flux.ConfigPatch) error {
-	return c.patchWithBody("PatchConfig", patch)
-}
-
-func (c *Client) GenerateDeployKey(_ flux.InstanceID) error {
-	return c.post("GenerateDeployKeys")
-}
-
-func (c *Client) Status(_ flux.InstanceID) (flux.Status, error) {
-	var res flux.Status
-	err := c.get(&res, "Status")
-	return res, err
-}
-
-func (c *Client) Export(_ flux.InstanceID) ([]byte, error) {
+func (c *Client) Export() ([]byte, error) {
 	var res []byte
 	err := c.get(&res, "Export")
 	return res, err
+}
+
+// === v helpers v ====
+
+func (c *Client) setToken(req *http.Request) {
+	if string(c.token) != "" {
+		SetToken(c.token, req)
+	}
 }
 
 // post is a simple query-param only post request
@@ -180,7 +154,7 @@ func (c *Client) methodWithResp(method string, dest interface{}, route string, b
 	if err != nil {
 		return errors.Wrapf(err, "constructing request %s", u)
 	}
-	c.token.Set(req)
+	c.setToken(req)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.executeRequest(req)
@@ -213,7 +187,7 @@ func (c *Client) get(dest interface{}, route string, queryParams ...string) erro
 	if err != nil {
 		return errors.Wrapf(err, "constructing request %s", u)
 	}
-	c.token.Set(req)
+	c.setToken(req)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.executeRequest(req)

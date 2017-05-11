@@ -122,7 +122,7 @@ func (opts *serviceReleaseOpts) RunE(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Requesting release ...\n")
 	}
 
-	jobID, err := opts.API.UpdateImages(noInstanceID, update.ReleaseSpec{
+	jobID, err := opts.API.UpdateImages(update.ReleaseSpec{
 		ServiceSpecs: services,
 		ImageSpec:    image,
 		Kind:         kind,
