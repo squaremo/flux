@@ -166,8 +166,12 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 	if err != nil {
 		t.Error(err)
 	}
-	if diff, err := Diff(ss, mock.ListServicesAnswer); err != nil || len(diff) > 0 {
-		t.Error(fmt.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListServicesAnswer, ss))
+	if !reflect.DeepEqual(ss, mock.ListServicesAnswer) {
+		if diff, err := Diff(ss, mock.ListServicesAnswer); err != nil || len(diff) > 0 {
+			t.Error(fmt.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListServicesAnswer, ss))
+		} else {
+			t.Fatal("DeepEqual says different, Diff says the same!")
+		}
 	}
 	mock.ListServicesError = fmt.Errorf("list services query failure")
 	ss, err = client.ListServices(namespace)
