@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,7 +166,7 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(ss, mock.ListServicesAnswer) {
+	if diff, err := Diff(ss, mock.ListServicesAnswer); err != nil || len(diff) > 0 {
 		t.Error(fmt.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListServicesAnswer, ss))
 	}
 	mock.ListServicesError = fmt.Errorf("list services query failure")
@@ -177,8 +179,9 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(ims, mock.ListImagesAnswer) {
-		t.Error(fmt.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListImagesAnswer, ims))
+	if diff, err := Diff(ims, mock.ListImagesAnswer); err != nil || len(diff) > 0 {
+		printDiff(diff)
+		t.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListImagesAnswer, ims)
 	}
 	mock.ListImagesError = fmt.Errorf("list images error")
 	if _, err = client.ListImages(update.ServiceSpecAll); err == nil {
@@ -205,7 +208,193 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(mock.SyncStatusAnswer, syncSt) {
-		t.Error(fmt.Errorf("expected: %#v\ngot: %#v"), mock.SyncStatusAnswer, syncSt)
+	if diff, err := Diff(mock.SyncStatusAnswer, syncSt); err != nil {
+		printDiff(diff)
+		t.Errorf("expected: %#v\ngot: %#v", mock.SyncStatusAnswer, syncSt)
 	}
+}
+
+// ===
+
+var ErrNotDiffable = errors.New("values are not diffable")
+
+type Chunk struct {
+	Deleted []interface{}
+	Added   []interface{}
+	Path    string
+}
+
+func printDiff(diff []Chunk) {
+	for _, d := range diff {
+		fmt.Printf("At %s:\n", d.Path)
+		for _, del := range d.Deleted {
+			fmt.Printf("- #v\n", del)
+		}
+		for _, add := range d.Added {
+			fmt.Printf("+ %#v\n", add)
+		}
+		println()
+	}
+}
+
+// Diff one object with another. This assumes that the objects being
+// compared are supposed to represent the same logical object, i.e.,
+// they were identified with the same ID. An error indicates they are
+// not comparable.
+func Diff(a, b interface{}) ([]Chunk, error) {
+	// Special case at the top: if these have different runtime types,
+	// they are not comparable.
+	typA, typB := reflect.TypeOf(a), reflect.TypeOf(b)
+	if typA != typB {
+		return nil, ErrNotDiffable
+	}
+	return diffValue(reflect.ValueOf(a), reflect.ValueOf(b), typA, "")
+}
+
+func Changed(A, B interface{}, path string) Chunk {
+	return Chunk{
+		Path:    path,
+		Deleted: []interface{}{A},
+		Added:   []interface{}{B},
+	}
+}
+
+func Added(B interface{}, path string) Chunk {
+	return Chunk{
+		Path:  path,
+		Added: []interface{}{B},
+	}
+}
+
+func Removed(A interface{}, path string) Chunk {
+	return Chunk{
+		Path:    path,
+		Deleted: []interface{}{A},
+	}
+}
+
+// Compare two reflected values and compile a list of differences
+// between them.
+func diffValue(a, b reflect.Value, typ reflect.Type, path string) ([]Chunk, error) {
+	switch typ.Kind() {
+	case reflect.Array:
+		fallthrough
+	case reflect.Slice:
+		return diffArrayOrSlice(a, b, typ, path)
+	case reflect.Interface:
+		return nil, errors.New("interface diff not implemented")
+	case reflect.Ptr:
+		a, b, typ = reflect.Indirect(a), reflect.Indirect(b), typ.Elem()
+		return diffValue(a, b, typ, path)
+	case reflect.Struct:
+		return diffStruct(a, b, typ, path)
+	case reflect.Map:
+		return diffMap(a, b, typ.Elem(), path)
+	case reflect.Func:
+		return nil, errors.New("func diff not implemented (and not implementable)")
+	default: // all ground types
+		if a.Interface() != b.Interface() {
+			return []Chunk{Changed(a.Interface(), b.Interface(), path)}, nil
+		}
+		return nil, nil
+	}
+}
+
+// diff each exported field individually. TODO: treat a struct with
+// diffs in ground values as a single chunk, rather than always
+// recursing.
+func diffStruct(a, b reflect.Value, structTyp reflect.Type, path string) ([]Chunk, error) {
+	var diffs []Chunk
+
+	for i := 0; i < structTyp.NumField(); i++ {
+		field := structTyp.Field(i)
+		if field.PkgPath == "" { // i.e., is an exported field
+			fieldDiffs, err := diffValue(a.Field(i), b.Field(i), field.Type, path+"."+field.Name)
+			if err != nil {
+				return nil, err
+			}
+			diffs = append(diffs, fieldDiffs...)
+		}
+	}
+	return diffs, nil
+}
+
+// diff each element, and include over- or underbite. TODO report an
+// array of ground values as a single chunk, rather than recursing.
+func diffArrayOrSlice(a, b reflect.Value, sliceTyp reflect.Type, path string) ([]Chunk, error) {
+	var changed []Chunk
+	elemTyp := sliceTyp.Elem()
+
+	i := 0
+	for ; i < a.Len() && i < b.Len(); i++ {
+		d, err := diffValue(a.Index(i), b.Index(i), elemTyp, fmt.Sprintf("%s[%d]", path, i))
+		if err != nil {
+			return nil, err
+		}
+		changed = append(changed, d...)
+	}
+
+	if i < a.Len() {
+		var deleted []interface{}
+		for j := i; j < a.Len(); j++ {
+			deleted = append(deleted, a.Index(j).Interface())
+		}
+		return append(changed, Chunk{Deleted: deleted, Path: fmt.Sprintf("%s[%d]", path, i)}), nil
+	}
+	if i < b.Len() {
+		var added []interface{}
+		for j := i; j < b.Len(); j++ {
+			added = append(added, b.Index(j).Interface())
+		}
+		return append(changed, Chunk{Added: added, Path: fmt.Sprintf("%s[%d]", path, i)}), nil
+	}
+	return changed, nil
+}
+
+// diff each entry in the map, and include entries in only one of A,
+// B.
+func diffMap(a, b reflect.Value, elemTyp reflect.Type, path string) ([]Chunk, error) {
+	if a.Kind() != reflect.Map || b.Kind() != reflect.Map {
+		return nil, errors.New("both values must be maps")
+	}
+
+	var diffs []Chunk
+	var zero reflect.Value
+	for _, keyA := range a.MapKeys() {
+		valA := a.MapIndex(keyA)
+		if valB := b.MapIndex(keyA); valB != zero {
+			moreDiffs, err := diffValue(valA, valB, elemTyp, fmt.Sprintf(`%s[%v]`, path, keyA))
+			if err != nil {
+				return nil, err
+			}
+			diffs = append(diffs, moreDiffs...)
+		} else {
+			diffs = append(diffs, Removed(valA.Interface(), fmt.Sprintf(`%s[%v]`, path, keyA)))
+		}
+	}
+	for _, keyB := range b.MapKeys() {
+		valB := b.MapIndex(keyB)
+		if valA := a.MapIndex(keyB); valA == zero {
+			diffs = append(diffs, Added(valB.Interface(), fmt.Sprintf(`%s[%v]`, path, keyB)))
+		}
+	}
+
+	sort.Sort(sorted(diffs))
+	return diffs, nil
+}
+
+// It helps to return the differences for a map in a stable order
+type sorted []Chunk
+
+func (d sorted) Len() int {
+	return len(d)
+}
+
+// Sort order for chunks: lexically on path
+func (d sorted) Less(i, j int) bool {
+	return strings.Compare(d[i].Path, d[j].Path) == -1
+}
+
+func (d sorted) Swap(a, b int) {
+	d[a], d[b] = d[b], d[a]
 }
