@@ -115,7 +115,7 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 				},
 			},
 		},
-		flux.ServiceStatus{},
+		//		flux.ServiceStatus{},
 	}
 
 	imagesAnswer := []flux.ImageStatus{
@@ -123,6 +123,7 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 			ID:         flux.ServiceID("barfoo/yello"),
 			Containers: []flux.Container{},
 		},
+		flux.ImageStatus{},
 	}
 
 	syncStatusAnswer := []string{
