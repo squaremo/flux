@@ -123,10 +123,41 @@ func (i ImageID) Components() (host, repo, tag string) {
 // record information about its creation time. (maybe more in the future)
 type Image struct {
 	ImageID
-	CreatedAt *time.Time `json:",omitempty"`
+	CreatedAt time.Time
 }
 
-func ParseImage(s string, createdAt *time.Time) (Image, error) {
+func (im Image) MarshalJSON() ([]byte, error) {
+	var t string
+	if !im.CreatedAt.IsZero() {
+		t = im.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	encode := struct {
+		ImageID
+		CreatedAt string `json:",omitempty"`
+	}{im.ImageID, t}
+	return json.Marshal(encode)
+}
+
+func (im *Image) UnmarshalJSON(b []byte) error {
+	unencode := struct {
+		ImageID
+		CreatedAt string `json:",omitempty"`
+	}{}
+	json.Unmarshal(b, &unencode)
+	im.ImageID = unencode.ImageID
+	if unencode.CreatedAt == "" {
+		im.CreatedAt = time.Time{}
+	} else {
+		t, err := time.Parse(time.RFC3339, unencode.CreatedAt)
+		if err != nil {
+			return err
+		}
+		im.CreatedAt = t.UTC()
+	}
+	return nil
+}
+
+func ParseImage(s string, createdAt time.Time) (Image, error) {
 	id, err := ParseImageID(s)
 	if err != nil {
 		return Image{}, err
