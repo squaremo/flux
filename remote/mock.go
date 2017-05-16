@@ -115,13 +115,20 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 				},
 			},
 		},
-		//		flux.ServiceStatus{},
+		flux.ServiceStatus{},
 	}
 
 	imagesAnswer := []flux.ImageStatus{
 		flux.ImageStatus{
-			ID:         flux.ServiceID("barfoo/yello"),
-			Containers: []flux.Container{},
+			ID: flux.ServiceID("barfoo/yello"),
+			Containers: []flux.Container{
+				{
+					Name: "flubnicator",
+					Current: flux.ImageDescription{
+						ID: imageID,
+					},
+				},
+			},
 		},
 		flux.ImageStatus{},
 	}
@@ -168,6 +175,9 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(ss, mock.ListServicesAnswer) {
+		at1 := ss[0].Containers[0].Current.CreatedAt
+		at2 := mock.ListServicesAnswer[0].Containers[0].Current.CreatedAt
+		t.Errorf("CreatedAt %s == %s -> %v", at1, at2, reflect.DeepEqual(at1, at2))
 		if diff, err := Diff(ss, mock.ListServicesAnswer); err != nil || len(diff) > 0 {
 			t.Error(fmt.Errorf("expected:\n%#v\ngot:\n%#v", mock.ListServicesAnswer, ss))
 		} else {
