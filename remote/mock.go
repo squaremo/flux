@@ -98,7 +98,7 @@ func PlatformTestBattery(t *testing.T, wrap func(mock Platform) Platform) {
 	services := flux.ServiceIDSet{}
 	services.Add(serviceList)
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	imageID, _ := flux.ParseImageID("quay.io/example.com/frob:v0.4.5")
 	serviceAnswer := []flux.ServiceStatus{
