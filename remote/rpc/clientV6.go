@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"fmt"
 	"io"
 	"net/rpc"
 
@@ -36,12 +37,17 @@ func (p *RPCClientV6) Export() ([]byte, error) {
 
 // Export is used to get service configuration in platform-specific format
 func (p *RPCClientV6) ListServices(namespace string) ([]flux.ServiceStatus, error) {
-	var services []flux.ServiceStatus
+	var services ListServicesResponse
 	err := p.client.Call("RPCServer.ListServices", namespace, &services)
 	if _, ok := err.(rpc.ServerError); !ok && err != nil {
 		return nil, remote.FatalError{err}
 	}
-	return services, err
+	fmt.Printf("DEBUG Response: %#v\n", services)
+	if services.Error != nil {
+		fmt.Printf("DEBUG *Error: %#v\n", services.Error)
+		return nil, services.Error
+	}
+	return services.Result, err
 }
 
 func (p *RPCClientV6) ListImages(spec update.ServiceSpec) ([]flux.ImageStatus, error) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/weaveworks/flux"
 	"github.com/weaveworks/flux/cluster"
+	//	fluxerr "github.com/weaveworks/flux/errors"
 	"github.com/weaveworks/flux/git"
 	"github.com/weaveworks/flux/guid"
 	"github.com/weaveworks/flux/history"
@@ -66,6 +67,8 @@ func (d *Daemon) ListServices(namespace string) ([]flux.ServiceStatus, error) {
 	var res []flux.ServiceStatus
 	services, err := d.Cluster.AllServices(namespace)
 	if err != nil {
+		herr := errors.Cause(err)
+		fmt.Printf("DEBUG returned error %#v\n", herr)
 		return nil, errors.Wrap(err, "getting services from cluster")
 	}
 

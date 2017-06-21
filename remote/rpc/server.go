@@ -1,11 +1,15 @@
 package rpc
 
 import (
+	"fmt"
 	"io"
 	"net/rpc"
 	"net/rpc/jsonrpc"
 
+	"github.com/pkg/errors"
+
 	"github.com/weaveworks/flux"
+	fluxerr "github.com/weaveworks/flux/errors"
 	"github.com/weaveworks/flux/job"
 	"github.com/weaveworks/flux/remote"
 	"github.com/weaveworks/flux/ssh"
@@ -46,15 +50,36 @@ func (p *RPCServer) Version(_ struct{}, resp *string) error {
 	return err
 }
 
-func (p *RPCServer) Export(_ struct{}, resp *[]byte) error {
+type ExportResponse struct {
+	Result []byte
+	Error  *fluxerr.Error
+}
+
+func (p *RPCServer) Export(_ struct{}, resp *ExportResponse) error {
 	v, err := p.p.Export()
-	*resp = v
+	resp.Result = v
+	if err, ok := err.(*fluxerr.Error); ok {
+		resp.Error = err
+	}
 	return err
 }
 
-func (p *RPCServer) ListServices(namespace string, resp *[]flux.ServiceStatus) error {
+type ListServicesResponse struct {
+	Result []flux.ServiceStatus
+	Error  *fluxerr.Error
+}
+
+func (p *RPCServer) ListServices(namespace string, resp *ListServicesResponse) error {
 	v, err := p.p.ListServices(namespace)
-	*resp = v
+	resp.Result = v
+	if err != nil {
+		err := errors.Cause(err)
+		if helperr, ok := err.(*fluxerr.Error); ok {
+			fmt.Printf("DEBUG RPC server setting error %#v\n", err)
+			resp.Error = helperr
+			return nil
+		}
+	}
 	return err
 }
 
