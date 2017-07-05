@@ -1,4 +1,12 @@
 FROM alpine:3.6
+
+LABEL org.label-schema.schema-version="1.0" \
+      org.label-schema.name="flux" \
+      org.label-schema.description="The Flux daemon, for synchronising your cluster with a git repo, and deploying new images" \
+      org.label-schema.url="https://github.com/weaveworks/flux" \
+      org.label-schema.vcs-url="git@github.com:weaveworks/flux" \
+      org.label-schema.vendor="Weaveworks"
+
 WORKDIR /home/flux
 ENTRYPOINT [ "/sbin/tini", "--", "fluxd" ]
 RUN apk add --no-cache openssh ca-certificates tini 'git>=2.3.0'

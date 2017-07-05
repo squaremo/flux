@@ -1,4 +1,12 @@
 FROM alpine:3.6
+
+LABEL org.label-schema.schema-version="1.0" \
+      org.label-schema.name="flux-service" \
+      org.label-schema.description="The Flux service: forwards the API and receives events from connected daemons." \
+      org.label-schema.url="https://github.com/weaveworks/flux" \
+      org.label-schema.vcs-url="git@github.com:weaveworks/flux" \
+      org.label-schema.vendor="Weaveworks"
+
 WORKDIR /home/flux
 ENTRYPOINT [ "/sbin/tini", "--", "fluxsvc" ]
 RUN apk add --no-cache ca-certificates tini
