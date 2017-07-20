@@ -37,8 +37,9 @@ func Tag(policy Policy) bool {
 type Updates map[flux.ServiceID]Update
 
 type Update struct {
-	Add    Set `json:"add"`
-	Remove Set `json:"remove"`
+	Add    Set    `json:"add"`
+	Remove Set    `json:"remove"`
+	TagAll string `json:"tag_all"`
 }
 
 type Set map[Policy]string
